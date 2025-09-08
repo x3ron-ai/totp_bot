@@ -1,43 +1,76 @@
-import os, time
+import os, time, json
 import pyotp
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.helpers import escape_markdown
 
 load_dotenv()
 
-TOKEN = os.getenv("TOKEN", 'okak')
-SECRET = os.getenv("TOTP_SECRET", 'okak')
+TOKEN = os.getenv("TOKEN")
 ALLOWED_USER_ID = int(os.getenv("USER_ID", 0))
 
-if not TOKEN or not SECRET:
-	print("Ошибка: не найден TOKEN или TOTP_SECRET в .env")
-	exit(1)
+SECRETS_FILE = "secrets.json"
 
-totp = pyotp.TOTP(SECRET)
+if os.path.exists(SECRETS_FILE):
+	with open(SECRETS_FILE, "r") as f:
+		secrets = json.load(f)
+else:
+	secrets = {}
+
+def save_secrets():
+	with open(SECRETS_FILE, "w") as f:
+		json.dump(secrets, f)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-	await update.message.reply_text("/totp for code generation\n/me for userid")
+	await update.message.reply_text("/totp <name> — get code\n/add <name> <secret> — add secret\n/list — totp list")
 
 async def send_totp(update: Update, context: ContextTypes.DEFAULT_TYPE):
-	user_id = update.effective_user.id
-	if user_id != ALLOWED_USER_ID:
+	if update.effective_user.id != ALLOWED_USER_ID:
 		return
-	code = totp.now()
-	time_remaining = totp.interval - (int(time.time()) % totp.interval)
-	await update.message.reply_text(f"TOTP: `{code}`\nremains {time_remaining} sec", parse_mode=ParseMode.MARKDOWN_V2)
 
-async def send_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-	user = update.effective_user
-	await update.message.reply_text(f"{user}")
+	if not context.args:
+		await update.message.reply_text("try: /totp <name>")
+		return
+
+	name = context.args[0]
+	if name not in secrets:
+		await update.message.reply_text(f"No secrets like {escape_markdown(name)}")
+		return
+
+	totp = pyotp.TOTP(secrets[name])
+	code = totp.now()
+	remain = totp.interval - (int(time.time()) % totp.interval)
+	await update.message.reply_text(f"{escape_markdown(name)}: `{code}`\n remains {remain} sec", parse_mode=ParseMode.MARKDOWN_V2)
+
+async def add_secret(update: Update, context: ContextTypes.DEFAULT_TYPE):
+	if update.effective_user.id != ALLOWED_USER_ID:
+		return
+
+	if len(context.args) < 2:
+		await update.message.reply_text("try: /add <name> <secret>")
+		return
+
+	name, secret = context.args[0], context.args[1]
+	secrets[name] = secret
+	save_secrets()
+	await update.message.reply_text(f"Secret added: {escape_markdown(name)}")
+
+async def list_secrets(update: Update, context: ContextTypes.DEFAULT_TYPE):
+	if update.effective_user.id != ALLOWED_USER_ID:
+		return
+	if not secrets:
+		await update.message.reply_text("No secrets.")
+	else:
+		await update.message.reply_text("Available: " + ", ".join(secrets.keys()))
 
 if __name__ == "__main__":
 	app = ApplicationBuilder().token(TOKEN).build()
 	app.add_handler(CommandHandler("start", start))
 	app.add_handler(CommandHandler("totp", send_totp))
-	app.add_handler(CommandHandler("me", send_user_info))
+	app.add_handler(CommandHandler("add", add_secret))
+	app.add_handler(CommandHandler("list", list_secrets))
 
-	print("Бот запущен...")
+	print("Running...")
 	app.run_polling()
-
