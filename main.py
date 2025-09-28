@@ -57,6 +57,9 @@ async def add_secret(update: Update, context: ContextTypes.DEFAULT_TYPE):
 	save_secrets()
 	await update.message.reply_text(f"Secret added: {escape_markdown(name)}")
 
+async def send_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+	await update.message.reply_text(f"Totp_working!")
+
 async def list_secrets(update: Update, context: ContextTypes.DEFAULT_TYPE):
 	if update.effective_user.id != ALLOWED_USER_ID:
 		return
@@ -71,6 +74,7 @@ if __name__ == "__main__":
 	app.add_handler(CommandHandler("totp", send_totp))
 	app.add_handler(CommandHandler("add", add_secret))
 	app.add_handler(CommandHandler("list", list_secrets))
+	app.add_handler(CommandHandler("status", send_status))
 
 	print("Running...")
 	app.run_polling()
