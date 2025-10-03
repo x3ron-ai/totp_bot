@@ -23,7 +23,7 @@ def save_secrets():
         json.dump(secrets, f)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("/totp <name> — get code\n/add <name> <secret> — add secret\n/list — totp list")
+    await update.message.reply_text(f"Your ID:{update.effective_user.id}\n/totp <name> — get code\n/add <name> <secret> — add secret\n/list — totp list")
 
 async def send_totp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ALLOWED_USER_ID:
